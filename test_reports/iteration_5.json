@@ -1,0 +1,22 @@
+{
+  "summary": "Backend-only verification of the AI env-key fallback that mirrors a VPS without a DB-saved key. Wrote /app/backend/tests/test_ai_env_fallback.py covering all 6 requested scenarios. All 6 tests PASSED in 139s. GET /api/admin/settings/ai returns source='env-key' with provider='gemini', model='gemini-3.8-flash', env_key_present=true, masked_key present. POST /api/admin/settings/ai/test returns ok:true, mode='direct', reply contains 'ok' (confirms direct HTTPS to Google, not Emergent proxy). DOCX import of Hydrocarbons_Questions.docx (Chemistry, extract) completed with status='done', used_ai=true and count>=60 questions — this is the PRIMARY FIX for the VPS. PDF import of Hydrocarbons_Solutions.pdf completed with count>0. DB override via PUT flipped source to 'admin'; DELETE then restored source='env-key'. Login requires role (401/422 without it). Final state confirmed via live curl: source='env-key' (no DB 'ai' doc), mirroring the VPS as required.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_ai_env_fallback.py",
+    "/app/test_reports/pytest/ai_env_fallback.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ai_key.resolve_full(): 'emergent' flag computed via key.startswith('sk-emergent-') — a user-supplied admin key happening to start with that prefix would be mis-routed to emergent branch. Minor edge case; prefer tracking source explicitly.",
+    "ai_key.load_from_db() clears _cfg.api_key when env-key is used; good. But resolve() returns env-key tuple only when _cfg.api_key is unset — behaviour is correct, just worth a code comment to prevent regressions.",
+    "server.py is 3620 lines — exceeds the 700-line guideline; split admin/settings/ai, import pipeline, and auth into separate routers for maintainability."
+  ],
+  "updated_files": ["/app/backend/tests/test_ai_env_fallback.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "admin@examnest.io / Admin@123 / role=admin",
+  "seed_data_creation": "None. DB override test cleans up its own doc so preview remains env-key-only.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "AI is currently sourced from GEMINI_API_KEY env var only; DB settings.ai doc is intentionally absent so preview mirrors VPS. Any test that saves an admin AI key MUST DELETE it afterwards to preserve this state. Test suite at /app/backend/tests/test_ai_env_fallback.py is a reliable regression for the env-key fallback and the DOCX/PDF import paths (~2m 20s runtime, mostly import polling)."
+}

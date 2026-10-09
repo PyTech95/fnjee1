@@ -86,3 +86,12 @@ React 18 (CRA+craco, Tailwind, shadcn) → FastAPI (`server.py` + `cbt.py`) → 
 - UNIVERSAL NEVER-ERROR IMPORT: _do_import_parse rewritten to (STEP1) code-first deterministic parse — parse_excel (xlsx) / extract_text_any -> regex (docx,pdf,pptx,pagemaker,txt,csv,html,rtf,md); (STEP2) AI fallback when code yields <3 OR image OR adapt — PDFs/images via parse_visual_pdf vision (images wrapped to PDF by parsers.image_to_pdf), other text via ai_extract_questions. All steps wrapped: NEVER raises, background job always ends status='done'; unreadable files return count=0 + friendly note (no 500/4xx). New parsers: parse_pptx, parse_markup, image_to_pdf, extract_text_any. Added dep python-pptx==1.0.2. Frontend accept list expanded to images/pptx/csv/html/rtf.
 - VERIFIED testing_agent iter3 (10/10) + iter4 (8/8, 100%): TXT regex, PPTX, PNG vision, DOCX 60+, solutions PDF adapt, garbage weird.xyz graceful, 20MB->200, login role.
 - Live progress plumbing (job.progress {pct,msg}) in backend + bulk endpoints (/questions/bulk-update, /questions/bulk-delete) done & tested. FRONTEND still pending: progress-bar display, folder/multi-file import, auto answer-key pairing UI, Question Bank filters+bulk-edit UI.
+
+## Fix: Word import works in preview but fails on VPS (2026-10, this session)
+- ROOT CAUSE: AI (Gemini) key was stored ONLY in the DB (Admin -> AI Settings). VPS has a fresh/empty DB -> no AI key -> chemistry .docx (regex finds 0) -> AI fallback had no key -> 0 questions = "not working". Preview worked only because the key was saved in the preview DB.
+- FIX: ai_key.py now falls back to an ENV provider key. Priority: DB admin key > GEMINI_API_KEY (or OPENAI_API_KEY / ANTHROPIC_API_KEY) env > EMERGENT_LLM_KEY. On a VPS set GEMINI_API_KEY in backend/.env; AI then runs via direct HTTPS to Google (ai_chat._gemini), no emergentintegrations needed (imported lazily only for the Emergent branch). status()/source reports 'env-key'.
+- Docs: deploy/backend.env.example now documents GEMINI_API_KEY as the recommended VPS way; EMERGENT_LLM_KEY noted as Emergent-platform-only.
+- VERIFIED testing_agent iter5 (6/6, 100%): with DB 'ai' doc deleted + GEMINI_API_KEY env only (mirrors VPS) -> AI status source='env-key', /ai/test mode='direct' ok, DOCX import count>=60, PDF import count>0, DB override still wins then cleaned up.
+- Preview is intentionally left in env-key-only state (no DB ai doc) to mirror VPS.
+
+### ACTION FOR USER ON VPS: add to backend/.env ->  GEMINI_API_KEY="<your Google AI Studio key>"  then `docker compose restart backend` (or redeploy).
