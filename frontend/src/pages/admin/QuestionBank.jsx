@@ -4,9 +4,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Search, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Search, Trash2, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { QuestionContent, QuestionImage } from "@/components/QuestionContent";
@@ -18,18 +23,57 @@ export default function QuestionBank() {
   const [rows, setRows] = useState([]);
   const [filters, setFilters] = useState({ subject: "", difficulty: "", q_type: "", search: "" });
   const [loading, setLoading] = useState(false);
+  const [sel, setSel] = useState(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [bulkEdit, setBulkEdit] = useState({ difficulty: "", status: "", chapter: "", topic: "", tags: "" });
 
   const load = () => {
     setLoading(true);
     const params = {};
     Object.entries(filters).forEach(([k, v]) => { if (v && v !== "all") params[k] = v; });
-    questionsApi.list(params).then(setRows).finally(() => setLoading(false));
+    questionsApi.list(params).then((d) => { setRows(d); setSel(new Set()); }).finally(() => setLoading(false));
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [filters]);
 
   const remove = async (id) => {
     if (!confirm("Delete this question?")) return;
     await questionsApi.remove(id); toast.success("Deleted"); load();
+  };
+
+  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allOnPage = rows.length > 0 && rows.every((r) => sel.has(r.id));
+  const toggleAll = () => setSel((s) => {
+    if (allOnPage) return new Set();
+    return new Set(rows.map((r) => r.id));
+  });
+
+  const ids = [...sel];
+
+  const doBulkDelete = async () => {
+    setDeleting(true);
+    try {
+      const r = await questionsApi.bulkDelete(ids);
+      toast.success(`Deleted ${r.deleted} question(s)`);
+      setConfirmBulk(false); load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Bulk delete failed");
+    } finally { setDeleting(false); }
+  };
+
+  const doBulkEdit = async () => {
+    const patch = {};
+    ["difficulty", "status", "chapter", "topic"].forEach((k) => { if (bulkEdit[k]) patch[k] = bulkEdit[k]; });
+    const add_tags = bulkEdit.tags.split(",").map((t) => t.trim()).filter(Boolean);
+    if (!Object.keys(patch).length && !add_tags.length) return toast.error("Choose at least one field to change");
+    try {
+      const r = await questionsApi.bulkUpdate(ids, patch, add_tags);
+      toast.success(`Updated ${r.modified} question(s)`);
+      setBulkEdit({ difficulty: "", status: "", chapter: "", topic: "", tags: "" });
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Bulk update failed");
+    }
   };
 
   return (
@@ -87,10 +131,45 @@ export default function QuestionBank() {
         </div>
       </Card>
 
+      {/* Bulk action bar — visible when rows are selected */}
+      {sel.size > 0 && (
+        <Card data-testid="bulk-action-bar" className="en-card p-3 flex flex-wrap items-center gap-3 border-primary/30 bg-primary/5">
+          <span data-testid="bulk-selected-count" className="text-sm font-semibold px-2">{sel.size} selected</span>
+          <Select value={bulkEdit.difficulty} onValueChange={(v) => setBulkEdit({ ...bulkEdit, difficulty: v })}>
+            <SelectTrigger data-testid="bulk-difficulty" className="w-[140px] h-9"><SelectValue placeholder="Set difficulty" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="easy">Easy</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="hard">Hard</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={bulkEdit.status} onValueChange={(v) => setBulkEdit({ ...bulkEdit, status: v })}>
+            <SelectTrigger data-testid="bulk-status" className="w-[130px] h-9"><SelectValue placeholder="Set status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="review">Review</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input data-testid="bulk-chapter" className="w-[150px] h-9" placeholder="Set chapter" value={bulkEdit.chapter} onChange={(e) => setBulkEdit({ ...bulkEdit, chapter: e.target.value })} />
+          <Input data-testid="bulk-tags" className="w-[160px] h-9" placeholder="Add tags (comma)" value={bulkEdit.tags} onChange={(e) => setBulkEdit({ ...bulkEdit, tags: e.target.value })} />
+          <Button data-testid="bulk-apply-btn" size="sm" variant="outline" className="rounded-full" onClick={doBulkEdit}>Apply changes</Button>
+          <div className="flex-1" />
+          <Button data-testid="bulk-delete-btn" size="sm" variant="destructive" className="rounded-full" onClick={() => setConfirmBulk(true)}>
+            <Trash2 className="h-4 w-4 mr-1.5" /> Delete selected
+          </Button>
+          <Button data-testid="bulk-clear-btn" size="sm" variant="ghost" className="rounded-full" onClick={() => setSel(new Set())}>Clear</Button>
+        </Card>
+      )}
+
       <Card className="en-card overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox data-testid="select-all-questions" checked={allOnPage} onCheckedChange={toggleAll} aria-label="Select all" />
+              </TableHead>
               <TableHead>Question</TableHead>
               <TableHead>Subject</TableHead>
               <TableHead>Chapter</TableHead>
@@ -101,10 +180,13 @@ export default function QuestionBank() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>}
-            {!loading && rows.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No questions yet. Try the Import Wizard.</TableCell></TableRow>}
+            {loading && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>}
+            {!loading && rows.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No questions yet. Try the Import Wizard.</TableCell></TableRow>}
             {rows.map((r) => (
-              <TableRow key={r.id} data-testid={`qrow-${r.id}`}>
+              <TableRow key={r.id} data-testid={`qrow-${r.id}`} className={sel.has(r.id) ? "bg-primary/5" : ""}>
+                <TableCell>
+                  <Checkbox data-testid={`select-q-${r.id}`} checked={sel.has(r.id)} onCheckedChange={() => toggle(r.id)} aria-label="Select question" />
+                </TableCell>
                 <TableCell className="max-w-md min-w-[220px]">
                   <details data-testid={`question-preview-${r.id}`}>
                     <summary data-testid={`question-preview-toggle-${r.id}`} className="cursor-pointer font-medium">
@@ -134,6 +216,27 @@ export default function QuestionBank() {
           </TableBody>
         </Table>
       </Card>
+
+      <AlertDialog open={confirmBulk} onOpenChange={setConfirmBulk}>
+        <AlertDialogContent data-testid="bulk-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" /> Delete {sel.size} question(s)?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the selected questions from the bank. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="bulk-delete-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction data-testid="bulk-delete-confirm-btn" disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); doBulkDelete(); }}>
+              {deleting ? "Deleting…" : `Delete ${sel.size}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

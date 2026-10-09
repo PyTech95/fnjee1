@@ -27,6 +27,8 @@ export const questionsApi = {
   update: (id, data) => api.put(`/questions/${id}`, data).then((r) => r.data),
   patch: (id, data) => api.patch(`/questions/${id}`, data).then((r) => r.data),
   remove: (id) => api.delete(`/questions/${id}`).then((r) => r.data),
+  bulkDelete: (ids) => api.post("/questions/bulk-delete", { ids }).then((r) => r.data),
+  bulkUpdate: (ids, patch, add_tags) => api.post("/questions/bulk-update", { ids, patch, add_tags }).then((r) => r.data),
   usage: (id) => api.get(`/questions/${id}/usage`).then((r) => r.data),
 };
 
