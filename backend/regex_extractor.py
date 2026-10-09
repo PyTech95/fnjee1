@@ -23,7 +23,7 @@ ANS_INLINE = re.compile(r"(?i)Ans(?:wer)?\s*[:\.\-]?\s*([1-4A-Da-d])")
 ANSKEY_MARKER = re.compile(r"(?im)^\s*(?:Answer[s]?[\s_]*(?:Key)?|Ans[s]?[\s_]*Key|Key)\s*[:\-]?\s*$")
 
 # Per-question answer key entry inside the answer-key block
-ANSKEY_ENTRY = re.compile(r"(?i)(?<![\w-])(\d{1,3})\s*[\.):\-]\s*([1-4A-Da-d])\b")
+ANSKEY_ENTRY = re.compile(r"(?i)(?<![\w-])(\d{1,3})[\.):\-]\s*\(?\s*([1-4A-Da-d])(?![\w])")
 
 
 def _normalize_option(s: str) -> str:

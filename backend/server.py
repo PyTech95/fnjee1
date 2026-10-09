@@ -471,7 +471,8 @@ async def _do_import_parse(*, data: bytes, filename: str, ext: str, text: str,
                            exam_default=None, class_default=None, year_default=None,
                            tags_default=None, marks_default=None, negative_default=None,
                            answer_data: Optional[bytes] = None, answer_ext: str = "",
-                           answer_text: Optional[str] = None, progress_cb=None) -> dict:
+                           answer_text: Optional[str] = None, progress_cb=None,
+                           prefer_ai: bool = False) -> dict:
     """Heavy lifting for an import: AI/regex extraction, categorisation, answer-key, dedupe.
     Pure bytes in → result dict out, so it can run synchronously OR in a background job."""
     async def _p(pct, msg):
@@ -500,12 +501,15 @@ async def _do_import_parse(*, data: bytes, filename: str, ext: str, text: str,
     is_spreadsheet = ext in ("xlsx", "xls")
 
     # ---------------- STEP 1: CODE-FIRST (deterministic, fast, free) ----------------
+    # Skip the fast regex path when the admin asked for AI vision (prefer_ai) on a PDF —
+    # scanned/complex question papers come out mangled via text regex.
+    skip_code = prefer_ai and (ext == "pdf" or is_image)
     try:
         if is_spreadsheet:
             await _p(40, "Reading spreadsheet…")
             parsed, warns = parse_excel(data)
             errors.extend(warns); used_regex = bool(parsed)
-        elif not is_image:
+        elif not is_image and not skip_code:
             if not text:
                 await _p(15, "Extracting text…")
                 text = extract_text_any(data, ext)
@@ -519,7 +523,7 @@ async def _do_import_parse(*, data: bytes, filename: str, ext: str, text: str,
     # ---------------- STEP 2: AI FALLBACK (only when code came up short) ----------------
     # The rule the user asked for: code first; if code can't do the job, AI converts
     # the file into questions. Images/scanned PDFs always need AI vision.
-    need_ai = use_ai and (is_image or adapt_requested or len(parsed) < 3)
+    need_ai = use_ai and (is_image or adapt_requested or prefer_ai or len(parsed) < 3)
     if need_ai:
         try:
             if ext == "pdf":
@@ -692,6 +696,7 @@ async def import_parse(
     tags_default: Optional[str] = Form(None),
     marks_default: Optional[float] = Form(None),
     negative_default: Optional[float] = Form(None),
+    prefer_ai: Optional[bool] = Form(False),
     user: dict = Depends(require_role('admin')),
 ):
     """Synchronous parse (kept for pasted text / quick jobs). For files that need AI,
@@ -708,7 +713,7 @@ async def import_parse(
         chapter_default=chapter_default, topic_default=topic_default, section_default=section_default,
         exam_default=exam_default, class_default=class_default, year_default=year_default,
         tags_default=tags_default, marks_default=marks_default, negative_default=negative_default,
-        answer_data=answer_data, answer_ext=answer_ext, answer_text=answer_text)
+        answer_data=answer_data, answer_ext=answer_ext, answer_text=answer_text, prefer_ai=bool(prefer_ai))
 
 
 @api.post("/import/start")
@@ -734,6 +739,7 @@ async def import_start(
     tags_default: Optional[str] = Form(None),
     marks_default: Optional[float] = Form(None),
     negative_default: Optional[float] = Form(None),
+    prefer_ai: Optional[bool] = Form(False),
     user: dict = Depends(require_role('admin')),
 ):
     """Kick off an import in the background and return a job id immediately.
@@ -755,7 +761,7 @@ async def import_start(
         chapter_default=chapter_default, topic_default=topic_default, section_default=section_default,
         exam_default=exam_default, class_default=class_default, year_default=year_default,
         tags_default=tags_default, marks_default=marks_default, negative_default=negative_default,
-        answer_data=answer_data, answer_ext=answer_ext, answer_text=answer_text)
+        answer_data=answer_data, answer_ext=answer_ext, answer_text=answer_text, prefer_ai=bool(prefer_ai))
     task = asyncio.create_task(_run_import_job(job_id, kwargs))
     _bg_tasks.add(task); task.add_done_callback(_bg_tasks.discard)
     return {"job_id": job_id, "filename": filename, "status": "processing"}

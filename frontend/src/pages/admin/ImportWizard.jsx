@@ -71,17 +71,19 @@ export default function ImportWizard() {
   };
 
   const runParse = async () => {
-    if (source === "file" && !file) return toast.error("Choose a file first");
+    if ((source === "file" || source === "qa_pdf") && !file) return toast.error(source === "qa_pdf" ? "Choose the Question PDF first" : "Choose a file first");
     if (source === "drive" && !driveUrl) return toast.error("Enter a Google Drive URL");
     if (source === "paste" && rawText.trim().length < 30) return toast.error("Paste at least a few questions");
     setParsing(true);
     try {
       const fd = new FormData();
-      if (source === "file") fd.append("file", file);
+      if (source === "file" || source === "qa_pdf") fd.append("file", file);
       if (source === "drive") fd.append("drive_url", driveUrl);
       if (source === "paste") fd.append("raw_text", rawText);
       if (answerFile) fd.append("answer_file", answerFile);
       if (answerText.trim()) fd.append("answer_text", answerText);
+      // Q+A PDF mode: force AI vision for accurate MCQ + options, treat as PDF.
+      if (source === "qa_pdf") { fd.append("prefer_ai", "true"); fd.append("file_type_hint", "pdf"); }
       fd.append("subject_default", subjectDefault);
       // Optional batch categorisation — only send fields the admin actually set.
       if (cat.type && cat.type !== "auto") fd.append("type_default", cat.type);
@@ -193,11 +195,35 @@ export default function ImportWizard() {
           </div>
 
           <Tabs value={source} onValueChange={setSource}>
-            <TabsList data-testid="source-tabs" className="rounded-full">
+            <TabsList data-testid="source-tabs" className="rounded-full flex-wrap h-auto">
+              <TabsTrigger data-testid="tab-source-qa-pdf" value="qa_pdf" className="rounded-full">Question + Answer PDF</TabsTrigger>
               <TabsTrigger data-testid="tab-source-file" value="file" className="rounded-full">Upload file</TabsTrigger>
               <TabsTrigger data-testid="tab-source-paste" value="paste" className="rounded-full">Paste text</TabsTrigger>
               <TabsTrigger data-testid="tab-source-drive" value="drive" className="rounded-full">Drive link</TabsTrigger>
             </TabsList>
+            <TabsContent value="qa_pdf" className="mt-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-semibold flex items-center gap-2"><FileImage className="h-4 w-4 text-primary" /> Question paper PDF</Label>
+                  <label htmlFor="qpdf-input" className="mt-2 block cursor-pointer border-2 border-dashed border-border rounded-2xl p-8 text-center hover:border-primary transition-colors duration-200">
+                    <Upload className="h-7 w-7 mx-auto text-muted-foreground" />
+                    <div className="mt-2 font-medium text-sm" data-testid="qpdf-name">{file ? file.name : "Choose question PDF"}</div>
+                    <input data-testid="qpdf-input" id="qpdf-input" type="file" className="hidden" accept=".pdf"
+                      onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  </label>
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold flex items-center gap-2"><KeyRound className="h-4 w-4 text-accent" /> Answer / solution PDF <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <label htmlFor="apdf-input" className="mt-2 block cursor-pointer border-2 border-dashed border-border rounded-2xl p-8 text-center hover:border-accent transition-colors duration-200">
+                    <Upload className="h-7 w-7 mx-auto text-muted-foreground" />
+                    <div className="mt-2 font-medium text-sm" data-testid="apdf-name">{answerFile ? answerFile.name : "Choose answer PDF"}</div>
+                    <input data-testid="apdf-input" id="apdf-input" type="file" className="hidden" accept=".pdf"
+                      onChange={(e) => setAnswerFile(e.target.files?.[0] || null)} />
+                  </label>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5"><Zap className="h-3.5 w-3.5 text-primary" /> AI reads the question PDF for accurate options & diagrams, then maps the correct answer from your answer PDF (by question order). Takes a little longer but gives the best result.</p>
+            </TabsContent>
             <TabsContent value="file" className="mt-4">
               <label htmlFor="file-input" className="block cursor-pointer border-2 border-dashed border-border rounded-2xl p-10 text-center hover:border-primary transition-colors duration-200">
                 <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
@@ -222,7 +248,7 @@ export default function ImportWizard() {
             </TabsContent>
           </Tabs>
 
-          <div className="rounded-2xl border border-dashed border-accent/40 bg-accent/5 p-4 space-y-3" data-testid="answer-key-block">
+          <div className={`rounded-2xl border border-dashed border-accent/40 bg-accent/5 p-4 space-y-3 ${source === "qa_pdf" ? "hidden" : ""}`} data-testid="answer-key-block">
             <div className="flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-accent" />
               <Label className="text-sm font-semibold">Answer key <span className="text-muted-foreground font-normal">(optional) — matched to questions by order</span></Label>
