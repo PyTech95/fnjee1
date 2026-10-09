@@ -95,3 +95,9 @@ React 18 (CRA+craco, Tailwind, shadcn) → FastAPI (`server.py` + `cbt.py`) → 
 - Preview is intentionally left in env-key-only state (no DB ai doc) to mirror VPS.
 
 ### ACTION FOR USER ON VPS: add to backend/.env ->  GEMINI_API_KEY="<your Google AI Studio key>"  then `docker compose restart backend` (or redeploy).
+
+## Feature: Larger uploads + no time cap + Delete-all-users (2026-10, this session)
+- Upload limits raised: visual_pdf 25MB->50MB, page cap 30->200, AI timeout 240s->2400s (40min); ai_chat httpx _TIMEOUT 240s->2400s; frontend pollImportJob ceiling 10min->60min. Caddyfile already request_body 60MB. App accepts 8-20MB uploads (verified HTTP 200).
+- IMPORTANT (VPS 3MB failure): that is still an EXTERNAL proxy 413 (nginx default client_max_body_size 1MB) in front of the app — raising app limits doesn't fix it. User must redeploy bundled Caddy (60MB) OR set `client_max_body_size 60m;` in their nginx (deploy/nginx-fnjee.conf).
+- Delete-all-users: POST /api/admin/users/purge (admin only) requires body {confirm:"DELETE ALL USERS"}; deletes all role!=admin users + their attempts, KEEPS admin accounts. Frontend AdminStudents.jsx: 'Delete all users' button -> dialog 1 (Yes continue) -> dialog 2 type-to-confirm 'DELETE ALL USERS' (final btn disabled until exact phrase). usersApi.purgeAll().
+- VERIFIED testing_agent iter6 (9/9 backend 100% + UI gating): 5/10/20MB->200, DOCX extract>=60, purge guard 400, purge happy deletes non-admins keeps admin, role-guarded, two-step UI gating. Seed data purged by test then restored from /app/tests/_users_backup.json.
