@@ -137,6 +137,7 @@ export const battleApi = {
 export const usersApi = {
   list: (role) => api.get("/users", { params: role ? { role } : {} }).then((r) => r.data),
   get: (id) => api.get(`/users/${id}`).then((r) => r.data),
+  purgeAll: () => api.post("/admin/users/purge", { confirm: "DELETE ALL USERS" }).then((r) => r.data),
 };
 
 export const rewardsApi = {

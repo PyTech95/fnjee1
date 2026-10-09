@@ -323,6 +323,22 @@ async def get_user(uid: str, user: dict = Depends(get_current_user)):
     return u
 
 
+@api.post("/admin/users/purge")
+async def purge_all_users(payload: dict, user: dict = Depends(require_role('admin'))):
+    """Danger zone: delete EVERY non-admin user (students, parents, teachers) and
+    their attempts in one shot. Admin accounts are kept so you don't lock yourself out.
+    Requires an explicit confirmation string to avoid accidents."""
+    if (payload or {}).get("confirm") != "DELETE ALL USERS":
+        raise HTTPException(400, "Confirmation phrase required")
+    victims = await db.users.find({"role": {"$ne": "admin"}}, {"_id": 0, "id": 1}).to_list(1000000)
+    ids = [v["id"] for v in victims]
+    du = await db.users.delete_many({"role": {"$ne": "admin"}})
+    da = await db.attempts.delete_many({"user_id": {"$in": ids}}) if ids else None
+    log.warning(f"ADMIN PURGE by {user.get('email')}: removed {du.deleted_count} users")
+    return {"ok": True, "deleted_users": du.deleted_count,
+            "deleted_attempts": (da.deleted_count if da else 0)}
+
+
 @api.get("/questions")
 async def list_questions(
     subject: Optional[str] = None, chapter: Optional[str] = None,

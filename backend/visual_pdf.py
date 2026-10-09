@@ -77,11 +77,11 @@ async def parse_visual_pdf(data, subject="Biology", mode="extract", progress_cb=
         if progress_cb:
             try: await progress_cb(pct, msg)
             except Exception: pass
-    if len(data) > 25*1024*1024:
-        raise ValueError("PDF must be smaller than 25 MB.")
+    if len(data) > 50*1024*1024:
+        raise ValueError("PDF must be smaller than 50 MB.")
     with pymupdf.open(stream=data, filetype="pdf") as doc:
-        if len(doc) > 30:
-            raise ValueError("Upload up to 30 PDF pages at a time.")
+        if len(doc) > 200:
+            raise ValueError("Upload up to 200 PDF pages at a time.")
         if doc.needs_pass:
             raise ValueError("Password-protected PDFs are not supported.")
         if mode not in ("extract", "adapt"):
@@ -111,7 +111,7 @@ async def parse_visual_pdf(data, subject="Biology", mode="extract", progress_cb=
                 f.write(data); path = f.name
             async with _lock:
                 await _p(25 if mode == "extract" else 60, f"AI is reading {len(doc)} page(s)…")
-                async with asyncio.timeout(240):
+                async with asyncio.timeout(2400):
                     out = await ai_complete(SYSTEM, instruction, file_paths=[path], max_tokens=32768)
                 await _p(90, "Structuring questions…")
                 raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", out.strip())

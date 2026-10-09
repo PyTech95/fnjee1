@@ -24,7 +24,7 @@ OWN_DEFAULT_MODEL = {
     "anthropic": "claude-haiku-4-5-20251001",
 }
 
-_TIMEOUT = httpx.Timeout(240.0, connect=20.0)
+_TIMEOUT = httpx.Timeout(2400.0, connect=20.0)  # long read: big files can take tens of minutes
 
 
 def _pdf_b64(path: str) -> str:

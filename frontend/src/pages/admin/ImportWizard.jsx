@@ -54,7 +54,7 @@ export default function ImportWizard() {
   // so the platform's 60s gateway timeout never fires on long AI extractions.
   const pollImportJob = async (jobId) => {
     const started = Date.now();
-    const TIMEOUT_MS = 10 * 60 * 1000; // 10 min ceiling
+    const TIMEOUT_MS = 60 * 60 * 1000; // 60 min ceiling — big files can take a long time
     while (Date.now() - started < TIMEOUT_MS) {
       await new Promise((res) => setTimeout(res, 2500));
       let job;
